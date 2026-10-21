@@ -132,7 +132,13 @@ export function createHandler({ getStore }) {
 
     // ----- ponte (só o bot) -----
     if (p.startsWith('/bridge/')) {
-      if (method !== 'POST' || !bridgeOk(req)) throw new HttpError(401, 'Não autorizado.');
+      if (method !== 'POST' || !bridgeOk(req)) {
+        if (method === 'POST') { // guarda que alguém (provavelmente o bot) tentou com chave errada — ajuda a diagnosticar
+          const prev = await store().get('meta/badKey', { type: 'json' });
+          if (!prev || Date.now() - prev.t > 30000) await store().setJSON('meta/badKey', { t: Date.now() });
+        }
+        throw new HttpError(401, 'Não autorizado.');
+      }
       if (p === '/bridge/poll') return bridgePoll(req);
       if (p === '/bridge/result') {
         const body = await readJson(req, 4 * 1024 * 1024);
@@ -183,7 +189,13 @@ export function createHandler({ getStore }) {
 
       if (method === 'GET' && p === '/api/public') {
         const s = await getSession(req), meta = await botMeta();
-        return json(200, { inviteUrl: INVITE_URL, user: s ? s.user : null, isBaygon: !!s && s.user.id === BAYGON_USER_ID, botOnline: !!meta && Date.now() - meta.lastPoll <= BOT_OFFLINE_AFTER });
+        const online = !!meta && Date.now() - meta.lastPoll <= BOT_OFFLINE_AFTER;
+        let diag = null;
+        if (s && !online) { // só para quem está logado e só quando o bot está offline
+          const bad = await store().get('meta/badKey', { type: 'json' });
+          diag = { siteHasKey: !!process.env.BRIDGE_KEY, botLastSeen: meta ? meta.lastPoll : 0, badKeyAt: bad ? bad.t : 0 };
+        }
+        return json(200, { inviteUrl: INVITE_URL, user: s ? s.user : null, isBaygon: !!s && s.user.id === BAYGON_USER_ID, botOnline: online, diag });
       }
       if (method === 'POST' && p === '/api/logout') {
         const sid = parseCookies(req).sid;
