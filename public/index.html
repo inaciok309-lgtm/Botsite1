@@ -298,7 +298,12 @@ async function render() {
 }
 async function boot() { PUB = await api('/api/public'); await render(); }
 window.addEventListener('hashchange', () => PUB && render());
-boot().then(() => { if (new URLSearchParams(location.search).get('erro')) { toast('Não consegui fazer o login. Tente de novo.', true); history.replaceState(null, '', '/'); } });
+boot().then(() => { if (new URLSearchParams(location.search).get('erro')) { toast('Não consegui fazer o login. Tente de novo.', true); history.replaceState(null, '', '/'); } }).catch((e) => {
+  $('#app').replaceChildren(h('div', { class: 'card' },
+    h('h3', { style: 'margin-top:0' }, '⚠️ Não consegui falar com o servidor do site'),
+    h('p', {}, e.message),
+    h('p', { class: 'mut' }, 'Erro 404: o arquivo netlify/functions/api.mjs não está no GitHub/deploy. Erro 500: a função está falhando — veja Logs → Functions no painel do Netlify.')));
+});
 </script>
 </body>
-  </html>
+</html>
